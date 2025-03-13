@@ -1,13 +1,33 @@
-# grafana_plugin_apm
-Plugin de Grafana con D3.js enfocado en APM  para microservicios Spring Boot en un cluster EKS
+# Grafana Plugin APM para Microservicios Spring Boot en EKS
+Este plugin de Grafana utiliza D3.js para proporcionar visualizaciones avanzadas de Application Performance Monitoring (APM) específicamente diseñadas para microservicios Spring Boot desplegados en Amazon EKS.
 
-# Instalar herramientas necesarias
+##Características principales
+Visualizaciones interactivas con D3.js
+
+Métricas específicas para Spring Boot
+
+Integración con Amazon EKS
+
+Soporte para Prometheus como fuente de datos
+
+##Requisitos previos
+Grafana 7.0+
+
+Node.js 14+
+
+npm 6+
+
+Cluster EKS con microservicios Spring Boot instrumentados
+
+
+
+## Instalar herramientas necesarias
 npm install -g @grafana/toolkit
 
-# Crear un nuevo plugin
+## Crear un nuevo plugin
 npx @grafana/toolkit plugin:create spring-boot-apm-panel
 
-# Navegar al directorio del plugin
+## Navegar al directorio del plugin
 cd spring-boot-apm-panel
 
 # Instalar dependencias adicionales
