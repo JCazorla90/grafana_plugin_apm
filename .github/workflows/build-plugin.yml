@@ -53,4 +53,14 @@ jobs:
         with:
           name: grafana-plugin
           path: grafana_plugin.tar.gz
-
+    
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v1.0.0
+          name: Release v1.0.0
+          draft: false
+          prerelease: false
+          files: grafana_plugin.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
