@@ -10,7 +10,8 @@
     "skipLibCheck": true,
     "baseUrl": "./",
     "paths": {
-      "*": ["node_modules/*"]
+      "@types": ["src/types"],    
+      "@SimplePanel": ["src/SimplePanel"]
     }
   },
   "include": ["src/**/*"],
