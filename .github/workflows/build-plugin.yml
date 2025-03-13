@@ -42,8 +42,8 @@ jobs:
       - name: Build project
         run: npm run build
 
-      - name: Verify `dist/` exists
-        run: ls -lah dist/ || echo "⚠️ WARNING: No se generó dist/"
+      - name: Verify dist exists
+        run: ls -lah dist/ || echo "WARNING"
 
       - name: Package plugin
         run: tar -czvf grafana_plugin.tar.gz dist/
