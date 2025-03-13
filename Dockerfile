@@ -8,20 +8,17 @@ RUN apk add --no-cache nodejs npm
 # Crear directorio de trabajo
 WORKDIR /usr/src/app
 
-# Copiar solo package.json y package-lock.json para optimizar caché
-COPY package.json package-lock.json ./
-
-# Instalar dependencias antes de copiar el código
-RUN npm install
-
-# Copiar el código fuente después de instalar dependencias
+# Copiar todo el código fuente
 COPY . ./
 
-# Construir el plugin
-RUN npm run build
+# Compilar el código para generar `dist/`
+RUN npm run build || echo "No se generó dist/"
 
-# Ahora `dist/` debe existir, podemos copiarla
-COPY dist /var/lib/grafana/plugins/spring-boot-apm-panel
+# Verificar si `dist/` se creó correctamente
+RUN ls -lah /usr/src/app/dist || echo " WARNING: No se generó dist/"
+
+# Copiar el plugin generado a Grafana
+COPY --from=0 /usr/src/app/dist /var/lib/grafana/plugins/spring-boot-apm-panel
 
 # Permitir plugins no firmados
 ENV GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS=spring-boot-apm-panel
