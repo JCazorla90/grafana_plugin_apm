@@ -48,7 +48,7 @@ jobs:
         run: tar -czvf grafana_plugin.tar.gz dist/
 
       - name: Upload plugin artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: grafana-plugin
           path: grafana_plugin.tar.gz
