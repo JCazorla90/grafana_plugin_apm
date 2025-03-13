@@ -1,12 +1,12 @@
-name: Package and Publish Plugin
+name: Build and Package Plugin
 
 on:
   push:
     branches: [main]
-  workflow_dispatch:  # Permite ejecutarlo manualmente
+  workflow_dispatch: 
 
 jobs:
-  build-and-publish:
+  build-and-package:
     runs-on: ubuntu-latest
 
     steps:
@@ -18,28 +18,10 @@ jobs:
         with:
           node-version: 18
 
-      - name: Generate package.json
-        run: |
-          cat <<EOF > package.json
-          {
-            "name": "grafana-plugin",
-            "version": "1.0.0",
-            "description": "Grafana APM Panel",
-            "main": "index.js",
-            "scripts": {
-              "build": "tsc"
-            },
-            "dependencies": {},
-            "devDependencies": {
-              "typescript": "^4.0.0"
-            }
-          }
-          EOF
-
       - name: Install dependencies
-        run: npm install --force
+        run: npm install
 
-      - name: Build project
+      - name: Build plugin
         run: npm run build
 
       - name: Verify `dist/` exists
@@ -48,9 +30,19 @@ jobs:
       - name: Package plugin
         run: tar -czvf grafana_plugin.tar.gz dist/
 
-      - name: Upload plugin artifact to GitHub Packages
+      - name: Upload package as artifact
         uses: actions/upload-artifact@v4
         with:
           name: grafana-plugin
           path: grafana_plugin.tar.gz
 
+      - name: Publish to GitHub Packages
+        uses: actions/upload-release-asset@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./grafana_plugin.tar.gz
+          asset_name: grafana_plugin.tar.gz
+          asset_content_type: application/gzip
