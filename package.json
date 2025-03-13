@@ -1,4 +1,11 @@
 {
+  "name": "grafana-plugin",
+  "version": "1.0.0",
+  "description": "Grafana APM Panel",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc"
+  },
   "dependencies": {
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
