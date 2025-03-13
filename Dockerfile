@@ -1,15 +1,18 @@
-FROM grafana/grafana:9.5.3
+FROM grafana/grafana:latest
 
 USER root
+
 RUN apk add --no-cache nodejs npm
+
+WORKDIR /usr/src/app
+COPY grafana_plugin_apm /usr/src/app
+
+RUN npm install
 
 COPY dist /var/lib/grafana/plugins/spring-boot-apm-panel
 
-COPY grafana.ini /etc/grafana/grafana.ini
-COPY provisioning /etc/grafana/provisioning
+ENV GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS=spring-boot-apm-panel
 
-RUN chown -R grafana:grafana /var/lib/grafana/plugins && \
-    npm cache clean --force
-
-USER grafana
 EXPOSE 3000
+
+CMD ["/run.sh"]
