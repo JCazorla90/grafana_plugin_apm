@@ -24,7 +24,7 @@ jobs:
         run: docker create --name grafana-plugin-container ghcr.io/jcazorla90/grafana_plugin_apm:75b185722590c93bc7de9a4e8f8e7ac624508bc7
 
       - name: Verify files in the container
-        run: docker run --rm ghcr.io/jcazorla90/grafana_plugin_apm:75b185722590c93bc7de9a4e8f8e7ac624508bc7 ls -lah /package || echo "❌ ERROR: No se generó el package en el contenedor"
+        run: docker run --rm ghcr.io/jcazorla90/grafana_plugin_apm:75b185722590c93bc7de9a4e8f8e7ac624508bc7 ls -lah /package || echo "❌ ERROR"
 
       - name: Extract the package from the container
         run: docker cp grafana-plugin-container:/package/grafana_plugin.tar.gz . || echo "❌ ERROR: No se encontró el archivo empaquetado"
