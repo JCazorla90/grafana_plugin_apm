@@ -1,24 +1,31 @@
-# Etapa de construcción
+# Primera etapa: Construcción del plugin
 FROM node:18-alpine AS builder
 
 WORKDIR /usr/src/app
 
-# Copiar archivos necesarios
-COPY package.json package-lock.json ./
-RUN npm install
+# Copiar package.json y generar las dependencias
+COPY package.json ./
+RUN npm install --force
 
+# Copiar el código fuente
 COPY . ./
-RUN npm run build
 
-# Comprimir el resultado
-RUN tar -czvf grafana_plugin.tar.gz dist/
+# Construir el plugin (esto generará `dist/`)
+RUN npm run build || echo "⚠️ No se generó dist/"
 
-# Imagen final solo para empaquetado
-FROM alpine:latest
-WORKDIR /package
+# Segunda etapa: Imagen final con Grafana
+FROM grafana/grafana:latest
 
-# Copiar el paquete desde builder
-COPY --from=builder /usr/src/app/grafana_plugin.tar.gz .
+USER root
 
-CMD ["ls", "-lah", "/package"]
+# Copiar el plugin generado desde la etapa "builder"
+COPY --from=builder /usr/src/app/dist /var/lib/grafana/plugins/spring-boot-apm-panel
 
+# Permitir plugins no firmados
+ENV GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS=spring-boot-apm-panel
+
+# Exponer puerto por defecto de Grafana
+EXPOSE 3000
+
+# Ejecutar Grafana
+CMD ["/run.sh"]
