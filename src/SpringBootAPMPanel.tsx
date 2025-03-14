@@ -35,9 +35,7 @@ export const SpringBootAPMPanel: React.FC<Props> = ({ options, data, width, heig
       return metrics;
     }
     
-    // Procesar cada serie de datos
     data.series.forEach(series => {
-      // Extrae los campos relevantes de la serie
       const serviceNameField = series.fields.find(field => field.name === 'serviceName' || field.name === 'service');
       const namespaceField = series.fields.find(field => field.name === 'namespace');
       const podField = series.fields.find(field => field.name === 'pod' || field.name === 'instance');
@@ -52,7 +50,6 @@ export const SpringBootAPMPanel: React.FC<Props> = ({ options, data, width, heig
       const jvmValueField = series.fields.find(field => field.name === 'jvmValue');
       const timestampField = series.fields.find(field => field.name === 'time');
       
-      // Iterar a través de los valores de las series
       const length = serviceNameField?.values.length || 0;
       for (let i = 0; i < length; i++) {
         const serviceName = serviceNameField?.values.get(i) || 'unknown';
@@ -69,7 +66,6 @@ export const SpringBootAPMPanel: React.FC<Props> = ({ options, data, width, heig
         const jvmValue = jvmValueField?.values.get(i);
         const timestamp = timestampField?.values.get(i);
         
-        // Determinar estado basado en umbrales
         let status: 'normal' | 'warning' | 'critical' = 'normal';
         if (responseTime) {
           if (responseTime > options.slowResponseThreshold * 2) {
@@ -79,14 +75,12 @@ export const SpringBootAPMPanel: React.FC<Props> = ({ options, data, width, heig
           }
         }
         
-        // Si hay tasa de error, puede afectar el estado
         if (errorRate && errorRate > 5) {
           status = 'critical';
         } else if (errorRate && errorRate > 1) {
           status = 'warning';
         }
         
-        // Crear objeto de métrica
         const metric: ServiceMetric = {
           serviceName,
           namespace,
@@ -96,7 +90,6 @@ export const SpringBootAPMPanel: React.FC<Props> = ({ options, data, width, heig
           timestamp,
         };
         
-        // Añadir campos específicos según el tipo
         if (type === 'endpoint' || type === 'external') {
           metric.endpoint = endpoint;
           metric.responseTime = responseTime;
@@ -121,16 +114,13 @@ export const SpringBootAPMPanel: React.FC<Props> = ({ options, data, width, heig
 
   useEffect(() => {
     if (d3Container.current) {
-      // Procesar los datos
       const metrics = processData();
       
       if (metrics.length === 0) {
-        // No hay datos para mostrar
         drawNoDataMessage();
         return;
       }
       
-      // Filtrar datos según las opciones seleccionadas
       const filteredMetrics = metrics.filter(metric => {
         if (metric.type === 'endpoint' && !options.showEndpoints) return false;
         if (metric.type === 'database' && !options.showDatabaseQueries) return false;
@@ -139,217 +129,193 @@ export const SpringBootAPMPanel: React.FC<Props> = ({ options, data, width, heig
         return true;
       });
       
-      // Agrupar datos si es necesario
       let displayData = filteredMetrics;
       if (options.groupByService) {
         const groupedMetrics = _.groupBy(filteredMetrics, 'serviceName');
-        // Transformar los datos agrupados según sea necesario
-        // (implementación simplificada)
+        displayData = Object.keys(groupedMetrics).flatMap(service => groupedMetrics[service]);
       }
       
-      // Limitar número de endpoints si es necesario
       if (options.maxEndpointsToShow > 0) {
         const endpointMetrics = displayData.filter(m => m.type === 'endpoint');
         if (endpointMetrics.length > options.maxEndpointsToShow) {
-          // Ordenar por tiempo de respuesta y tomar los top N
           const sortedEndpoints = [...endpointMetrics].sort((a, b) => 
             (b.responseTime || 0) - (a.responseTime || 0)
           );
           const topEndpoints = sortedEndpoints.slice(0, options.maxEndpointsToShow);
-          
-          // Reemplazar los endpoints en los datos de visualización
           displayData = displayData.filter(m => m.type !== 'endpoint').concat(topEndpoints);
         }
       }
       
-      // Llamar a la función de dibujo con los datos procesados
       drawVisualization(displayData);
     }
   }, [data, width, height, options]);
 
-  // Función para dibujar la visualización
   const drawVisualization = (metrics: ServiceMetric[]) => {
-    // Limpiar visualización anterior
     d3.select(d3Container.current).selectAll("*").remove();
     
-    // Configurar dimensiones y márgenes
     const margin = { top: 20, right: 30, bottom: 50, left: 60 };
     const innerWidth = width - margin.left - margin.right;
     const innerHeight = height - margin.top - margin.bottom;
     
-    // Crear el SVG
     const svg = d3.select(d3Container.current)
       .append('svg')
       .attr('width', width)
       .attr('height', height)
       .append('g')
       .attr('transform', `translate(${margin.left},${margin.top})`);
-    
-    // Agrupar métricas por tipo
-    const endpointMetrics = metrics.filter(m => m.type === 'endpoint');
-    const databaseMetrics = metrics.filter(m => m.type === 'database');
-    const externalMetrics = metrics.filter(m => m.type === 'external');
-    const jvmMetrics = metrics.filter(m => m.type === 'jvm');
-    
-    // Función para obtener el color según el estado
-    const getColor = (status: string) => {
-      switch(status) {
-        case 'critical': return options.criticalColor;
-        case 'warning': return options.warningColor;
-        default: return options.normalColor;
+
+    const nodes: { id: string; type: string; status: string }[] = [];
+    const links: { source: string; target: string; value?: number }[] = [];
+    const nodeMap = new Map<string, { id: string; type: string; status: string }>();
+
+    metrics.forEach(metric => {
+      const serviceId = `${metric.serviceName}-${metric.namespace}`;
+      if (!nodeMap.has(serviceId)) {
+        nodeMap.set(serviceId, {
+          id: serviceId,
+          type: 'service',
+          status: metric.status || 'normal',
+        });
       }
-    };
-    
-    // Crear gráficos según el tipo de métrica
-    
-    // Si hay métricas de endpoints, crear gráfico de barras para tiempos de respuesta
-    if (endpointMetrics.length > 0) {
-      drawEndpointChart(svg, endpointMetrics, innerWidth, innerHeight * 0.4, 0);
+
+      if (metric.type === 'endpoint' && metric.endpoint) {
+        const endpointId = `${serviceId}-endpoint-${metric.endpoint}`;
+        if (!nodeMap.has(endpointId)) {
+          nodeMap.set(endpointId, {
+            id: endpointId,
+            type: 'endpoint',
+            status: metric.status || 'normal',
+          });
+        }
+        links.push({
+          source: serviceId,
+          target: endpointId,
+          value: metric.responseTime,
+        });
+      } else if (metric.type === 'database' && metric.databaseType) {
+        const dbId = `${serviceId}-db-${metric.databaseType}`;
+        if (!nodeMap.has(dbId)) {
+          nodeMap.set(dbId, {
+            id: dbId,
+            type: 'database',
+            status: metric.status || 'normal',
+          });
+        }
+        links.push({
+          source: serviceId,
+          target: dbId,
+          value: metric.responseTime,
+        });
+      } else if (metric.type === 'external' && metric.endpoint) {
+        const externalId = `${serviceId}-external-${metric.endpoint}`;
+        if (!nodeMap.has(externalId)) {
+          nodeMap.set(externalId, {
+            id: externalId,
+            type: 'external',
+            status: metric.status || 'normal',
+          });
+        }
+        links.push({
+          source: serviceId,
+          target: externalId,
+          value: metric.responseTime,
+        });
+      }
+    });
+
+    nodes.push(...nodeMap.values());
+
+    if (nodes.length === 0) {
+      drawNoDataMessage();
+      return;
     }
-    
-    // Si hay métricas de base de datos, crear gráfico para consultas
-    if (databaseMetrics.length > 0 && options.showDatabaseQueries) {
-      const yOffset = endpointMetrics.length > 0 ? innerHeight * 0.45 : 0;
-      drawDatabaseChart(svg, databaseMetrics, innerWidth, innerHeight * 0.25, yOffset);
-    }
-    
-    // Si hay métricas JVM, crear gráficos para ellas
-    if (jvmMetrics.length > 0 && options.showJVMMetrics) {
-      const yOffset = (endpointMetrics.length > 0 ? 0.45 : 0) + 
-                     (databaseMetrics.length > 0 ? 0.25 : 0);
-      drawJVMChart(svg, jvmMetrics, innerWidth, innerHeight * 0.25, innerHeight * yOffset);
-    }
-  };
-  
-  // Función para dibujar gráfico de endpoints
-  const drawEndpointChart = (svg: any, metrics: ServiceMetric[], width: number, height: number, yOffset: number) => {
-    // Ordenar por tiempo de respuesta (descendente)
-    const sortedMetrics = [...metrics].sort((a, b) => (b.responseTime || 0) - (a.responseTime || 0));
-    
-    // Escalas
-    const xScale = d3.scaleBand()
-      .domain(sortedMetrics.map(m => m.endpoint || ''))
-      .range([0, width])
-      .padding(0.2);
-    
-    const yScale = d3.scaleLinear()
-      .domain([0, d3.max(sortedMetrics, d => d.responseTime) || 1000])
-      .range([height, 0]);
-    
-    // Grupo para esta sección
-    const group = svg.append('g')
-      .attr('transform', `translate(0,${yOffset})`);
-    
-    // Título de sección
-    group.append('text')
-      .attr('x', 0)
-      .attr('y', -5)
-      .style('font-size', '12px')
-      .style('font-weight', 'bold')
-      .text('Response Time by Endpoint (ms)');
-    
-    // Ejes
-    group.append('g')
-      .attr('transform', `translate(0,${height})`)
-      .call(d3.axisBottom(xScale))
-      .selectAll('text')
-      .style('text-anchor', 'end')
-      .attr('dx', '-.8em')
-      .attr('dy', '.15em')
-      .attr('transform', 'rotate(-45)');
-    
-    group.append('g')
-      .call(d3.axisLeft(yScale));
-    
-    // Umbral de respuesta lenta
-    if (options.slowResponseThreshold > 0) {
-      group.append('line')
-        .attr('x1', 0)
-        .attr('x2', width)
-        .attr('y1', yScale(options.slowResponseThreshold))
-        .attr('y2', yScale(options.slowResponseThreshold))
-        .attr('stroke', options.warningColor)
-        .attr('stroke-dasharray', '5,5');
-      
-      group.append('text')
-        .attr('x', width)
-        .attr('y', yScale(options.slowResponseThreshold) - 5)
-        .style('text-anchor', 'end')
-        .style('font-size', '10px')
-        .text(`Slow Threshold (${options.slowResponseThreshold}ms)`);
-    }
-    
-    // Barras
-    group.selectAll('.bar')
-      .data(sortedMetrics)
+
+    const simulation = d3.forceSimulation(nodes)
+      .force('link', d3.forceLink(links).id((d: any) => d.id).distance(100))
+      .force('charge', d3.forceManyBody().strength(-300))
+      .force('center', d3.forceCenter(innerWidth / 2, innerHeight / 2))
+      .force('collision', d3.forceCollide().radius(30));
+
+    const link = svg.append('g')
+      .attr('class', 'links')
+      .selectAll('line')
+      .data(links)
       .enter()
-      .append('rect')
-      .attr('class', 'bar')
-      .attr('x', d => xScale(d.endpoint || '') || 0)
-      .attr('y', d => yScale(d.responseTime || 0))
-      .attr('width', xScale.bandwidth())
-      .attr('height', d => height - yScale(d.responseTime || 0))
-      .attr('fill', d => {
-        if (d.status === 'critical') return options.criticalColor;
-        if (d.status === 'warning') return options.warningColor;
-        return options.normalColor;
-      });
-    
-    // Mostrar valor encima de cada barra
-    group.selectAll('.bar-value')
-      .data(sortedMetrics)
+      .append('line')
+      .attr('stroke', '#999')
+      .attr('stroke-opacity', 0.6)
+      .attr('stroke-width', (d) => Math.sqrt(d.value || 1));
+
+    const node = svg.append('g')
+      .attr('class', 'nodes')
+      .selectAll('circle')
+      .data(nodes)
+      .enter()
+      .append('circle')
+      .attr('r', (d) => (d.type === 'service' ? 10 : 7))
+      .attr('fill', (d) => {
+        switch (d.status) {
+          case 'critical':
+            return options.criticalColor;
+          case 'warning':
+            return options.warningColor;
+          default:
+            return options.normalColor;
+        }
+      })
+      .call(
+        d3.drag()
+          .on('start', dragstarted)
+          .on('drag', dragged)
+          .on('end', dragended)
+      );
+
+    const labels = svg.append('g')
+      .attr('class', 'labels')
+      .selectAll('text')
+      .data(nodes)
       .enter()
       .append('text')
-      .attr('class', 'bar-value')
-      .attr('x', d => (xScale(d.endpoint || '') || 0) + xScale.bandwidth() / 2)
-      .attr('y', d => yScale(d.responseTime || 0) - 5)
+      .attr('dy', -15)
       .attr('text-anchor', 'middle')
       .style('font-size', '10px')
-      .text(d => `${Math.round(d.responseTime || 0)}ms`);
+      .text((d) => d.id.split('-')[0]);
+
+    simulation.on('tick', () => {
+      link
+        .attr('x1', (d: any) => d.source.x)
+        .attr('y1', (d: any) => d.source.y)
+        .attr('x2', (d: any) => d.target.x)
+        .attr('y2', (d: any) => d.target.y);
+
+      node
+        .attr('cx', (d: any) => d.x)
+        .attr('cy', (d: any) => d.y);
+
+      labels
+        .attr('x', (d: any) => d.x)
+        .attr('y', (d: any) => d.y);
+    });
+
+    function dragstarted(event: any, d: any) {
+      if (!event.active) simulation.alphaTarget(0.3).restart();
+      d.fx = d.x;
+      d.fy = d.y;
+    }
+
+    function dragged(event: any, d: any) {
+      d.fx = event.x;
+      d.fy = event.y;
+    }
+
+    function dragended(event: any, d: any) {
+      if (!event.active) simulation.alphaTarget(0);
+      d.fx = null;
+      d.fy = null;
+    }
   };
-  
-  // Función para dibujar gráfico de métricas de base de datos
-  const drawDatabaseChart = (svg: any, metrics: ServiceMetric[], width: number, height: number, yOffset: number) => {
-    // Implementación similar al gráfico de endpoints pero para métricas de base de datos
-    // Dependiendo de los datos, podría ser un gráfico diferente
-    
-    // Grupo para esta sección
-    const group = svg.append('g')
-      .attr('transform', `translate(0,${yOffset})`);
-    
-    // Título de sección
-    group.append('text')
-      .attr('x', 0)
-      .attr('y', -5)
-      .style('font-size', '12px')
-      .style('font-weight', 'bold')
-      .text('Database Query Performance');
-    
-    // Implementar visualización de consultas de base de datos
-    // (se podría mostrar como una tabla o un gráfico dependiendo de los datos)
-  };
-  
-  // Función para dibujar gráfico de métricas JVM
-  const drawJVMChart = (svg: any, metrics: ServiceMetric[], width: number, height: number, yOffset: number) => {
-    // Grupo para esta sección
-    const group = svg.append('g')
-      .attr('transform', `translate(0,${yOffset})`);
-    
-    // Título de sección
-    group.append('text')
-      .attr('x', 0)
-      .attr('y', -5)
-      .style('font-size', '12px')
-      .style('font-weight', 'bold')
-      .text('JVM Metrics');
-    
-    // Implementar visualización de métricas JVM
-    // (Podría ser un gauge chart para memoria, gráfico de líneas para GC, etc.)
-  };
-  
-  // Función para mostrar mensaje cuando no hay datos
+
   const drawNoDataMessage = () => {
-    // Limpiar visualización anterior
     d3.select(d3Container.current).selectAll("*").remove();
     
     const svg = d3.select(d3Container.current)
@@ -363,6 +329,56 @@ export const SpringBootAPMPanel: React.FC<Props> = ({ options, data, width, heig
       .attr('text-anchor', 'middle')
       .style('font-size', '14px')
       .text('No data available for selected options');
+  };
+
+  // Funciones que no se usan en el grafo pero se mantienen por compatibilidad
+  const drawEndpointChart = (svg: any, metrics: ServiceMetric[], width: number, height: number, yOffset: number) => {
+    const sortedMetrics = [...metrics].sort((a, b) => (b.responseTime || 0) - (a.responseTime || 0));
+    const xScale = d3.scaleBand()
+      .domain(sortedMetrics.map(m => m.endpoint || ''))
+      .range([0, width])
+      .padding(0.2);
+    const yScale = d3.scaleLinear()
+      .domain([0, d3.max(sortedMetrics, d => d.responseTime) || 1000])
+      .range([height, 0]);
+    const group = svg.append('g').attr('transform', `translate(0,${yOffset})`);
+    group.append('text')
+      .attr('x', 0)
+      .attr('y', -5)
+      .style('font-size', '12px')
+      .style('font-weight', 'bold')
+      .text('Response Time by Endpoint (ms)');
+    group.append('g').attr('transform', `translate(0,${height})`).call(d3.axisBottom(xScale));
+    group.append('g').call(d3.axisLeft(yScale));
+    group.selectAll('.bar')
+      .data(sortedMetrics)
+      .enter()
+      .append('rect')
+      .attr('x', d => xScale(d.endpoint || '') || 0)
+      .attr('y', d => yScale(d.responseTime || 0))
+      .attr('width', xScale.bandwidth())
+      .attr('height', d => height - yScale(d.responseTime || 0))
+      .attr('fill', d => d.status === 'critical' ? options.criticalColor : d.status === 'warning' ? options.warningColor : options.normalColor);
+  };
+
+  const drawDatabaseChart = (svg: any, metrics: ServiceMetric[], width: number, height: number, yOffset: number) => {
+    const group = svg.append('g').attr('transform', `translate(0,${yOffset})`);
+    group.append('text')
+      .attr('x', 0)
+      .attr('y', -5)
+      .style('font-size', '12px')
+      .style('font-weight', 'bold')
+      .text('Database Query Performance');
+  };
+
+  const drawJVMChart = (svg: any, metrics: ServiceMetric[], width: number, height: number, yOffset: number) => {
+    const group = svg.append('g').attr('transform', `translate(0,${yOffset})`);
+    group.append('text')
+      .attr('x', 0)
+      .attr('y', -5)
+      .style('font-size', '12px')
+      .style('font-weight', 'bold')
+      .text('JVM Metrics');
   };
 
   return <div ref={d3Container} style={{ width, height }} />;
