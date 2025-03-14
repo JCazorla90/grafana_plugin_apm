@@ -1,31 +1,35 @@
-# Primera etapa: Construcción del plugin
-FROM node:18-alpine AS builder
+name: Build Plugin with Docker and Extract Package
 
-WORKDIR /usr/src/app
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:  # Permite ejecutarlo manualmente
 
-# Copiar package.json y generar las dependencias
-COPY package.json ./
-RUN npm install --force
+jobs:
+  build-and-package:
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+      contents: read
 
-# Copiar el código fuente
-COPY . ./
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-# Construir el plugin (esto generará `dist/`)
-RUN npm run build || echo "⚠️ No se generó dist/"
+      - name: Build Docker image
+        run: |
+          docker build -t grafana-plugin-builder .
 
-# Segunda etapa: Imagen final con Grafana
-FROM grafana/grafana:latest
+      - name: Create a container from the built image
+        run: |
+          docker create --name grafana-plugin-container grafana-plugin-builder
 
-USER root
+      - name: Extract the package from the container
+        run: |
+          docker cp grafana-plugin-container:/package/grafana_plugin.tar.gz .
 
-# Copiar el plugin generado desde la etapa "builder"
-COPY --from=builder /usr/src/app/dist /var/lib/grafana/plugins/spring-boot-apm-panel
-
-# Permitir plugins no firmados
-ENV GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS=spring-boot-apm-panel
-
-# Exponer puerto por defecto de Grafana
-EXPOSE 3000
-
-# Ejecutar Grafana
-CMD ["/run.sh"]
+      - name: Upload package as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: grafana-plugin
+          path: grafana_plugin.tar.gz
