@@ -24,7 +24,8 @@ npm install -g @grafana/toolkit
 2. ** Hazte un clone  de este repositorio**:
 ```
 
-git clone https://github.com/yourusername/grafana_plugin_apm.git
+git clone https://github.com/JCazorla90/grafana_plugin_apm.git
+
 cd grafana_plugin_apm
 
 ```
