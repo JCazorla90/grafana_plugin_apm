@@ -1,35 +1,24 @@
-name: Build Plugin with Docker and Extract Package
+# Etapa de construcción
+FROM node:18-alpine AS builder
 
-on:
-  push:
-    branches: [main]
-  workflow_dispatch:  # Permite ejecutarlo manualmente
+WORKDIR /usr/src/app
 
-jobs:
-  build-and-package:
-    runs-on: ubuntu-latest
-    permissions:
-      packages: write
-      contents: read
+# Copiar archivos necesarios
+COPY package.json package-lock.json ./
+RUN npm install
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+COPY . ./
+RUN npm run build
 
-      - name: Build Docker image
-        run: |
-          docker build -t grafana-plugin-builder .
+# Comprimir el resultado
+RUN tar -czvf grafana_plugin.tar.gz dist/
 
-      - name: Create a container from the built image
-        run: |
-          docker create --name grafana-plugin-container grafana-plugin-builder
+# Imagen final solo para empaquetado
+FROM alpine:latest
+WORKDIR /package
 
-      - name: Extract the package from the container
-        run: |
-          docker cp grafana-plugin-container:/package/grafana_plugin.tar.gz .
+# Copiar el paquete desde builder
+COPY --from=builder /usr/src/app/grafana_plugin.tar.gz .
 
-      - name: Upload package as artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: grafana-plugin
-          path: grafana_plugin.tar.gz
+CMD ["ls", "-lah", "/package"]
+
